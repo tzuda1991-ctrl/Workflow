@@ -16,7 +16,7 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Build Real APK with Gradle
+    - name: Build APK Successfully
       run: |
         export ANDROID_HOME=$HOME/android-sdk
         mkdir -p $ANDROID_HOME/cmdline-tools
@@ -53,8 +53,8 @@ jobs:
 
         cat << 'EOF' > build.gradle
         plugins {
-            id 'com.android.application' version '8.2.0' apply false
-            id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
+            id 'com.android.application' version '8.1.1' apply false
+            id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
         }
         EOF
 
@@ -285,7 +285,7 @@ jobs:
         }
         EOF
 
-        gradle wrapper --gradle-version 8.5
+        gradle wrapper --gradle-version 8.1.1
         ./gradlew assembleDebug
 
     - name: Upload Real APK
