@@ -1,0 +1,412 @@
+name: Build Porter Helper APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Generate Complete Android Project & Build
+      run: |
+        mkdir -p app/src/main/java/com/example/orderhelper
+        mkdir -p app/src/main/res/layout
+        mkdir -p app/src/main/res/xml
+        mkdir -p app/src/main/res/values
+
+        cat << 'EOF' > settings.gradle
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        rootProject.name = "PorterHelper"
+        include ':app'
+        EOF
+
+        cat << 'EOF' > build.gradle
+        plugins {
+            id 'com.android.application' version '8.1.1' apply false
+            id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
+        }
+        EOF
+
+        cat << 'EOF' > gradle.properties
+        org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+        android.useAndroidX=true
+        kotlin.code.style=official
+        android.nonTransitiveRClass=true
+        EOF
+
+        cat << 'EOF' > app/build.gradle
+        plugins {
+            id 'com.android.application'
+            id 'org.jetbrains.kotlin.android'
+        }
+
+        android {
+            namespace 'com.example.orderhelper'
+            compileSdk 34
+
+            defaultConfig {
+                applicationId "com.example.orderhelper"
+                minSdk 24
+                targetSdk 34
+                versionCode 1
+                versionName "1.0"
+            }
+
+            buildTypes {
+                release {
+                    minifyEnabled false
+                }
+            }
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+            kotlinOptions {
+                jvmTarget = '17'
+            }
+        }
+
+        dependencies {
+            implementation 'androidx.core:core-ktx:1.12.0'
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.10.0'
+        }
+        EOF
+
+        cat << 'EOF' > app/src/main/res/values/strings.xml
+        <resources>
+            <string name="app_name">Porter Auto Helper</string>
+            <string name="service_desc">Automatically reads order fare and slides to accept based on your filter</string>
+        </resources>
+        EOF
+
+        cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+            android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+            android:accessibilityFeedbackType="feedbackGeneric"
+            android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagReportViewIds"
+            android:canPerformGestures="true"
+            android:canRetrieveWindowContent="true"
+            android:description="@string/service_desc"
+            android:notificationTimeout="100" />
+        EOF
+
+        cat << 'EOF' > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+            <application
+                android:allowBackup="true"
+                android:label="@string/app_name"
+                android:supportsRtl="true"
+                android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+
+                <service
+                    android:name=".AutoAcceptService"
+                    android:exported="true"
+                    android:label="Porter Auto Filter"
+                    android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+                    <intent-filter>
+                        <action android:name="android.accessibilityservice.AccessibilityService" />
+                    </intent-filter>
+                    <meta-data
+                        android:name="android.accessibilityservice"
+                        android:resource="@xml/accessibility_service_config" />
+                </service>
+
+            </application>
+        </manifest>
+        EOF
+
+        cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Porter Order Filter Setup"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="16dp"/>
+
+                <Switch
+                    android:id="@+id/swEnableBot"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Auto-Accept Bot ON / OFF"
+                    android:textSize="18sp"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Minimum Order Price (₹):" />
+
+                <EditText
+                    android:id="@+id/etMinFare"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Jaise: 400"
+                    android:inputType="number" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Maximum Distance (KM) [0 = Koi limit nahi]:"
+                    android:layout_marginTop="12dp" />
+
+                <EditText
+                    android:id="@+id/etMaxKm"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Jaise: 15 (0 matlab sab chalega)"
+                    android:inputType="number" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Drop Area / Location Name (Optional):"
+                    android:layout_marginTop="12dp" />
+
+                <EditText
+                    android:id="@+id/etLocation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Khali chhodein agar sab area chahiye" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Slide Button Y-Coordinate (Screen Height):"
+                    android:layout_marginTop="12dp" />
+
+                <EditText
+                    android:id="@+id/etSwipeY"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Default: 1950"
+                    android:inputType="number" />
+
+                <Button
+                    android:id="@+id/btnSave"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Save Filter Settings"
+                    android:layout_marginTop="20dp" />
+
+                <Button
+                    android:id="@+id/btnAccessibility"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Open Accessibility Settings"
+                    android:layout_marginTop="12dp" />
+
+            </LinearLayout>
+        </ScrollView>
+        EOF
+
+        cat << 'EOF' > app/src/main/java/com/example/orderhelper/MainActivity.kt
+        package com.example.orderhelper
+
+        import android.content.Context
+        import android.content.Intent
+        import android.os.Bundle
+        import android.provider.Settings
+        import android.widget.Button
+        import android.widget.EditText
+        import android.widget.Switch
+        import android.widget.Toast
+        import androidx.appcompat.app.AppCompatActivity
+
+        class MainActivity : AppCompatActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                setContentView(R.layout.activity_main)
+
+                val prefs = getSharedPreferences("OrderPrefs", Context.MODE_PRIVATE)
+                val swEnableBot = findViewById<Switch>(R.id.swEnableBot)
+                val etMinFare = findViewById<EditText>(R.id.etMinFare)
+                val etMaxKm = findViewById<EditText>(R.id.etMaxKm)
+                val etLocation = findViewById<EditText>(R.id.etLocation)
+                val etSwipeY = findViewById<EditText>(R.id.etSwipeY)
+                val btnSave = findViewById<Button>(R.id.btnSave)
+                val btnAccessibility = findViewById<Button>(R.id.btnAccessibility)
+
+                swEnableBot.isChecked = prefs.getBoolean("bot_enabled", true)
+                etMinFare.setText(prefs.getInt("min_fare", 300).toString())
+                etMaxKm.setText(prefs.getInt("max_km", 0).toString())
+                etLocation.setText(prefs.getString("location", ""))
+                etSwipeY.setText(prefs.getFloat("swipe_y", 1950f).toInt().toString())
+
+                btnSave.setOnClickListener {
+                    val enabled = swEnableBot.isChecked
+                    val minFare = etMinFare.text.toString().toIntOrNull() ?: 0
+                    val maxKm = etMaxKm.text.toString().toIntOrNull() ?: 0
+                    val location = etLocation.text.toString().trim()
+                    val swipeY = etSwipeY.text.toString().toFloatOrNull() ?: 1950f
+
+                    prefs.edit()
+                        .putBoolean("bot_enabled", enabled)
+                        .putInt("min_fare", minFare)
+                        .putInt("max_km", maxKm)
+                        .putString("location", location)
+                        .putFloat("swipe_y", swipeY)
+                        .apply()
+
+                    Toast.makeText(this, "Settings Saved Successfully!", Toast.LENGTH_SHORT).show()
+                }
+
+                btnAccessibility.setOnClickListener {
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }
+            }
+        }
+        EOF
+
+        cat << 'EOF' > app/src/main/java/com/example/orderhelper/AutoAcceptService.kt
+        package com.example.orderhelper
+
+        import android.accessibilityservice.AccessibilityService
+        import android.accessibilityservice.GestureDescription
+        import android.content.Context
+        import android.graphics.Path
+        import android.view.accessibility.AccessibilityEvent
+        import android.view.accessibility.AccessibilityNodeInfo
+
+        class AutoAcceptService : AccessibilityService() {
+
+            private var isSwiping = false
+
+            override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+                val prefs = getSharedPreferences("OrderPrefs", Context.MODE_PRIVATE)
+                if (!prefs.getBoolean("bot_enabled", true)) return
+
+                val rootNode = rootInActiveWindow ?: return
+                val screenTexts = mutableListOf<String>()
+                extractText(rootNode, screenTexts)
+
+                if (shouldAccept(screenTexts, prefs) && !isSwiping) {
+                    isSwiping = true
+                    val swipeY = prefs.getFloat("swipe_y", 1950f)
+                    performSlide(swipeY)
+                }
+            }
+
+            private fun extractText(node: AccessibilityNodeInfo?, list: MutableList<String>) {
+                if (node == null) return
+                if (!node.text.isNullOrEmpty()) {
+                    list.add(node.text.toString())
+                }
+                if (!node.contentDescription.isNullOrEmpty()) {
+                    list.add(node.contentDescription.toString())
+                }
+                for (i in 0 until node.childCount) {
+                    extractText(node.getChild(i), list)
+                }
+            }
+
+            private fun shouldAccept(texts: List<String>, prefs: android.content.SharedPreferences): Boolean {
+                val minFare = prefs.getInt("min_fare", 300)
+                val maxKm = prefs.getInt("max_km", 0)
+                val targetLoc = prefs.getString("location", "") ?: ""
+
+                var hasSlideButton = false
+                var fareMatches = false
+                var kmMatches = (maxKm == 0)
+                var locationMatches = targetLoc.isEmpty()
+
+                for (text in texts) {
+                    if (text.contains("Accept", true) || text.contains("Slide", true) || text.contains("Swipe", true)) {
+                        hasSlideButton = true
+                    }
+                    if (text.contains("₹")) {
+                        val num = text.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
+                        if (num >= minFare) fareMatches = true
+                    }
+                    if (maxKm > 0 && text.contains("km", true)) {
+                        val kmVal = text.replace(Regex("[^0-9.]"), "").toDoubleOrNull() ?: 999.0
+                        if (kmVal <= maxKm) kmMatches = true
+                    }
+                    if (targetLoc.isNotEmpty() && text.contains(targetLoc, ignoreCase = true)) {
+                        locationMatches = true
+                    }
+                }
+                return hasSlideButton && fareMatches && kmMatches && locationMatches
+            }
+
+            private fun performSlide(yCoord: Float) {
+                val path = Path().apply {
+                    moveTo(140f, yCoord)
+                    lineTo(940f, yCoord)
+                }
+                val stroke = GestureDescription.StrokeDescription(path, 0, 420)
+                val gesture = GestureDescription.Builder().addStroke(stroke).build()
+
+                dispatchGesture(gesture, object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        isSwiping = false
+                    }
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        isSwiping = false
+                    }
+                }, null)
+            }
+
+            override fun onInterrupt() {}
+        }
+        EOF
+
+        gradle wrapper --gradle-version 8.2
+        chmod +x gradlew
+        ./gradlew assembleDebug
+
+    - name: Upload Ready APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Porter-Auto-Helper-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
+        
