@@ -19,7 +19,7 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Generate Complete Android Project & Build
+    - name: Generate Android Project & Build APK
       run: |
         mkdir -p app/src/main/java/com/example/orderhelper
         mkdir -p app/src/main/res/layout
@@ -47,8 +47,8 @@ jobs:
 
         cat << 'EOF' > build.gradle
         plugins {
-            id 'com.android.application' version '8.1.1' apply false
-            id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
+            id 'com.android.application' version '8.2.0' apply false
+            id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
         }
         EOF
 
@@ -94,7 +94,7 @@ jobs:
         dependencies {
             implementation 'androidx.core:core-ktx:1.12.0'
             implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.10.0'
+            implementation 'com.google.android.material:material:1.11.0'
         }
         EOF
 
@@ -184,7 +184,7 @@ jobs:
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Minimum Order Price (₹):" />
+                    android:text="Minimum Order Price (Rs):" />
 
                 <EditText
                     android:id="@+id/etMinFare"
@@ -196,14 +196,14 @@ jobs:
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Maximum Distance (KM) [0 = Koi limit nahi]:"
+                    android:text="Maximum Distance (KM) [0 = No Limit]:"
                     android:layout_marginTop="12dp" />
 
                 <EditText
                     android:id="@+id/etMaxKm"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Jaise: 15 (0 matlab sab chalega)"
+                    android:hint="Jaise: 15"
                     android:inputType="number" />
 
                 <TextView
@@ -271,142 +271,4 @@ jobs:
                 val swEnableBot = findViewById<Switch>(R.id.swEnableBot)
                 val etMinFare = findViewById<EditText>(R.id.etMinFare)
                 val etMaxKm = findViewById<EditText>(R.id.etMaxKm)
-                val etLocation = findViewById<EditText>(R.id.etLocation)
-                val etSwipeY = findViewById<EditText>(R.id.etSwipeY)
-                val btnSave = findViewById<Button>(R.id.btnSave)
-                val btnAccessibility = findViewById<Button>(R.id.btnAccessibility)
-
-                swEnableBot.isChecked = prefs.getBoolean("bot_enabled", true)
-                etMinFare.setText(prefs.getInt("min_fare", 300).toString())
-                etMaxKm.setText(prefs.getInt("max_km", 0).toString())
-                etLocation.setText(prefs.getString("location", ""))
-                etSwipeY.setText(prefs.getFloat("swipe_y", 1950f).toInt().toString())
-
-                btnSave.setOnClickListener {
-                    val enabled = swEnableBot.isChecked
-                    val minFare = etMinFare.text.toString().toIntOrNull() ?: 0
-                    val maxKm = etMaxKm.text.toString().toIntOrNull() ?: 0
-                    val location = etLocation.text.toString().trim()
-                    val swipeY = etSwipeY.text.toString().toFloatOrNull() ?: 1950f
-
-                    prefs.edit()
-                        .putBoolean("bot_enabled", enabled)
-                        .putInt("min_fare", minFare)
-                        .putInt("max_km", maxKm)
-                        .putString("location", location)
-                        .putFloat("swipe_y", swipeY)
-                        .apply()
-
-                    Toast.makeText(this, "Settings Saved Successfully!", Toast.LENGTH_SHORT).show()
-                }
-
-                btnAccessibility.setOnClickListener {
-                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                }
-            }
-        }
-        EOF
-
-        cat << 'EOF' > app/src/main/java/com/example/orderhelper/AutoAcceptService.kt
-        package com.example.orderhelper
-
-        import android.accessibilityservice.AccessibilityService
-        import android.accessibilityservice.GestureDescription
-        import android.content.Context
-        import android.graphics.Path
-        import android.view.accessibility.AccessibilityEvent
-        import android.view.accessibility.AccessibilityNodeInfo
-
-        class AutoAcceptService : AccessibilityService() {
-
-            private var isSwiping = false
-
-            override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-                val prefs = getSharedPreferences("OrderPrefs", Context.MODE_PRIVATE)
-                if (!prefs.getBoolean("bot_enabled", true)) return
-
-                val rootNode = rootInActiveWindow ?: return
-                val screenTexts = mutableListOf<String>()
-                extractText(rootNode, screenTexts)
-
-                if (shouldAccept(screenTexts, prefs) && !isSwiping) {
-                    isSwiping = true
-                    val swipeY = prefs.getFloat("swipe_y", 1950f)
-                    performSlide(swipeY)
-                }
-            }
-
-            private fun extractText(node: AccessibilityNodeInfo?, list: MutableList<String>) {
-                if (node == null) return
-                if (!node.text.isNullOrEmpty()) {
-                    list.add(node.text.toString())
-                }
-                if (!node.contentDescription.isNullOrEmpty()) {
-                    list.add(node.contentDescription.toString())
-                }
-                for (i in 0 until node.childCount) {
-                    extractText(node.getChild(i), list)
-                }
-            }
-
-            private fun shouldAccept(texts: List<String>, prefs: android.content.SharedPreferences): Boolean {
-                val minFare = prefs.getInt("min_fare", 300)
-                val maxKm = prefs.getInt("max_km", 0)
-                val targetLoc = prefs.getString("location", "") ?: ""
-
-                var hasSlideButton = false
-                var fareMatches = false
-                var kmMatches = (maxKm == 0)
-                var locationMatches = targetLoc.isEmpty()
-
-                for (text in texts) {
-                    if (text.contains("Accept", true) || text.contains("Slide", true) || text.contains("Swipe", true)) {
-                        hasSlideButton = true
-                    }
-                    if (text.contains("₹")) {
-                        val num = text.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
-                        if (num >= minFare) fareMatches = true
-                    }
-                    if (maxKm > 0 && text.contains("km", true)) {
-                        val kmVal = text.replace(Regex("[^0-9.]"), "").toDoubleOrNull() ?: 999.0
-                        if (kmVal <= maxKm) kmMatches = true
-                    }
-                    if (targetLoc.isNotEmpty() && text.contains(targetLoc, ignoreCase = true)) {
-                        locationMatches = true
-                    }
-                }
-                return hasSlideButton && fareMatches && kmMatches && locationMatches
-            }
-
-            private fun performSlide(yCoord: Float) {
-                val path = Path().apply {
-                    moveTo(140f, yCoord)
-                    lineTo(940f, yCoord)
-                }
-                val stroke = GestureDescription.StrokeDescription(path, 0, 420)
-                val gesture = GestureDescription.Builder().addStroke(stroke).build()
-
-                dispatchGesture(gesture, object : GestureResultCallback() {
-                    override fun onCompleted(gestureDescription: GestureDescription?) {
-                        isSwiping = false
-                    }
-                    override fun onCancelled(gestureDescription: GestureDescription?) {
-                        isSwiping = false
-                    }
-                }, null)
-            }
-
-            override fun onInterrupt() {}
-        }
-        EOF
-
-        gradle wrapper --gradle-version 8.2
-        chmod +x gradlew
-        ./gradlew assembleDebug
-
-    - name: Upload Ready APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: Porter-Auto-Helper-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
-        
+                val etLocation = findViewById<EditText>(
